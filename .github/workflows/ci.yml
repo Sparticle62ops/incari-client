@@ -33,6 +33,8 @@ jobs:
         run: tools/ci/check-patch-budget.sh
       - name: Every feature has a Rust status
         run: tools/ci/check-rust-status.sh
+      - name: No hard-coded Minecraft version
+        run: tools/ci/check-version-literals.sh
       - name: Install glslang
         run: sudo apt-get install -y --no-install-recommends glslang-tools
       - name: Shaders validate
@@ -78,8 +80,10 @@ jobs:
       # in work/ on the runner and is never cached or uploaded.
       - name: Fresh clone to patched tree
         run: ./incari setup
-      - name: Patches round-trip
+      - name: Patches round-trip (and replaced classes stamped)
         run: ./incari rebuild --check
+      - name: Library pins match Minecraft's
+        run: tools/ci/check-mojang-pins.sh
       # Formatting, Error Prone and NullAway, module boundaries, ArchUnit and unit tests, and the
       # full client compiled from the patched tree. That includes the tests that parse
       # app-web/download-budget.properties; the size check itself (:app-web:checkDownloadSize) runs

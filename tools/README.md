@@ -13,7 +13,7 @@ Build-time and development tools. None of them ships in a build.
 | `sprites/` | Decodes the game's sprites and their mip levels at build time | [README](sprites/README.md) |
 | `wsbridge/` | A development Eagler proxy: Eagler's handshake in front of a vanilla server | [README](wsbridge/README.md) |
 | `onlinedev/` | A development stand-in for the online service, in memory; `peer.mjs` is a second player for it | `build.gradle.kts`, `peer.mjs` |
-| `ci/` | Repository guards CI runs: no Mojang content or builds, no publishing, DCO sign-offs, GLSL, the patch budget | each script's header |
+| `ci/` | Repository guards CI runs: no Mojang content or builds, no publishing, DCO sign-offs, GLSL, the patch budget, no hard-coded game version, library pins matching Minecraft's | each script's header |
 | `git-hooks/` | The pre-commit hook `./incari setup` installs | `pre-commit` |
 | `icon/` | `make_icon.py` draws Incari's icon (`incari-icon.svg`) and its PNG sizes | the script's docstring |
 | `backdrop/` | `make_backdrop.py` makes the menus' blurred photo from its CC0 original | the script's docstring |

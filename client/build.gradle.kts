@@ -84,15 +84,16 @@ val onlineUrlSource = tasks.register("onlineUrlSource") {
     }
 }
 
-// This build's Incari version and public repository (incari.properties), and whether it's a release
+// This build's Incari version, public repository and game version (incari.properties), and whether it's a release
 // build (`-Pteavm.release`, as `./incari build` makes): only those show the title screen's update
 // notice. Dev builds never do, except for tests (-Dincari.updates=on, the page's ?updates=on).
 val incariProperties = Properties().apply {
     repoRoot.file("incari.properties").asFile.reader().use { load(it) }
 }
 val buildInfoSource = tasks.register("buildInfoSource") {
-    description = "Writes this build's Incari version, repository, featured servers and release flag into a generated source."
+    description = "Writes this build's Incari version, repository, featured servers, game version and release flag into a generated source."
     val version = incariProperties.getProperty("incari.version", "")
+    val minecraftVersion = incariProperties.getProperty("minecraft.version", "")
     val repository = incariProperties.getProperty("incari.repository", "")
     val featured = incariProperties.getProperty("incari.featured", "")
     val release = providers.gradleProperty("teavm.release").isPresent
@@ -100,6 +101,7 @@ val buildInfoSource = tasks.register("buildInfoSource") {
     inputs.property("version", version)
     inputs.property("repository", repository)
     inputs.property("featured", featured)
+    inputs.property("minecraftVersion", minecraftVersion)
     inputs.property("release", release)
     outputs.dir(out)
     doLast {
@@ -118,6 +120,11 @@ val buildInfoSource = tasks.register("buildInfoSource") {
             |    public static final String REPOSITORY = ${quoted(repository)};
             |    /** The featured servers built in, as "name|address" joined by ";" (ADR 0062). */
             |    public static final String FEATURED = ${quoted(featured)};
+            |    /**
+            |     * The Minecraft release this tree targets ("26.3"). For code that runs before the game's
+            |     * own SharedConstants can be read, such as the page naming its cached client jar.
+            |     */
+            |    public static final String MINECRAFT_VERSION = ${quoted(minecraftVersion)};
             |    /** Whether this is a release build, the kind players are given. */
             |    public static final boolean RELEASE = $release;
             |

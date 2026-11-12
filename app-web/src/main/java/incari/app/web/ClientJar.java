@@ -1,6 +1,7 @@
 package incari.app.web;
 
 import incari.classlib.resources.ClassPathResources;
+import incari.client.IncariBuild;
 import incari.platform.web.storage.WebFileSystem;
 import java.io.IOException;
 
@@ -18,8 +19,11 @@ final class ClientJar {
 
     static final String URL = "client.jar";
 
-    /** The game version the jar is, which names its cached copy: a new version's replaces it. */
-    static final String VERSION = "26.3";
+    /**
+     * The game version the jar is, which names its cached copy: a new version's replaces it. From
+     * incari.properties, so a version bump can't leave players on a stale cached jar.
+     */
+    static final String VERSION = IncariBuild.MINECRAFT_VERSION;
 
     private ClientJar() {}
 
