@@ -27,7 +27,11 @@ public final class Main {
               apply [--force]    rebuild work/client from the decompiled sources and patches/
                                  (--force discards unsaved commits and edits in work/client)
               rebuild [--check]  regenerate patches/ from the commits in work/client
-                                 (--check writes nothing, fails if patches/ is out of date)
+                                 (--check writes nothing, fails if patches/ is out of date
+                                 or a replaced class's original changed, see classes)
+              classes [--stamp]  list the classes patches/classes.txt replaces whose Mojang
+                                 original changed since the replacement was checked against it
+                                 (--stamp records the current originals once they're reviewed)
               build [--out <dir>] [--only fast|compatible|rust] [--no-sounds] [--html]
                                  compile the release browser builds, Fast, Compatible and the
                                  experimental Rust (or just one with --only), into one folder for
@@ -115,6 +119,33 @@ public final class Main {
                 if (check && result.changed()) {
                     throw new CliException(
                             "patches/ doesn't match work/client. Run ./incari rebuild and commit the result.");
+                }
+                if (check) {
+                    ClientTree tree = new ClientTree(ws);
+                    List<ClientTree.Drift> drift = tree.replacementDrift(config.minecraftVersion());
+                    if (!drift.isEmpty()) {
+                        tree.reportDrift(drift, config.minecraftVersion());
+                        throw new CliException(drift.size() + " replaced class(es) in patches/classes.txt"
+                                + " aren't stamped against this vendor tree. Review them, then run"
+                                + " ./incari classes --stamp and commit classes.txt.");
+                    }
+                }
+            }
+            case "classes" -> {
+                boolean stamp = flags.remove("--stamp");
+                noFlags(command, flags);
+                ClientTree tree = new ClientTree(ws);
+                if (stamp) {
+                    int count = tree.stampReplacements(config.minecraftVersion());
+                    Log.step("Stamped " + count + " replaced classes against Minecraft " + config.minecraftVersion());
+                } else {
+                    List<ClientTree.Drift> drift = tree.replacementDrift(config.minecraftVersion());
+                    tree.reportDrift(drift, config.minecraftVersion());
+                    Log.step(
+                            drift.isEmpty()
+                                    ? "Every replaced class matches its stamp"
+                                    : drift.size() + " replaced class(es) to review");
+                    return drift.isEmpty() ? 0 : 1;
                 }
             }
             case "build" -> {

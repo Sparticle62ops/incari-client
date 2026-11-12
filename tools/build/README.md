@@ -9,7 +9,8 @@ into patch files. This is how the repo stays patch-only. Run it through `./incar
 | `./incari fetch` | Download the pinned version's jar and libraries, checked against Mojang's SHA-1s |
 | `./incari decompile` | Vineflower into `work/decompiled/<version>` (skipped if unchanged) |
 | `./incari apply [--force]` | Rebuild `work/client` from the decompiled source, `classes.txt` and `patches/`. Refuses to drop unsaved work without `--force` |
-| `./incari rebuild [--check]` | Regenerate `patches/` from `work/client`'s commits. `--check` fails if stale |
+| `./incari rebuild [--check]` | Regenerate `patches/` from `work/client`'s commits. `--check` fails if stale, or if a replaced class's stamp is |
+| `./incari classes [--stamp]` | List the classes `classes.txt` replaces whose Mojang original changed since their stamp; `--stamp` records the current ones once reviewed ([`docs/updating.md`](../../docs/updating.md)) |
 | `./incari assets` | Download the asset index and sounds for the desktop and dev server |
 | `./incari build [--out <dir>] [--only fast\|compatible\|rust] [--no-sounds] [--html]` | Release builds as one folder (`dist/web/`, ADR 0028) or one HTML file (`--html`, ADR 0057). The folder has the experimental Rust build in `rust/` when this machine can build it (ADR 0068; skipped, saying why, otherwise). Never share either ([`docs/self-hosting.md`](../../docs/self-hosting.md)) |
 | `./incari survey` | The TeaVM compile survey ([`tools/survey`](../survey/README.md)) |
@@ -41,6 +42,8 @@ work/
   `classes.txt` owns.
 - **Unsaved work is never silently dropped.**
 - **Commit subjects are `<subsystem>: <summary>`;** the subsystem is the folder under `patches/`.
+- **Every replacement names its original:** a `classes.txt` stamp (`<version>@<vendor blob>`) per
+  `replace` line, so a Minecraft bump that changes the original is flagged, not silently drifted.
 
 ## How to test
 

@@ -4,34 +4,38 @@
 # A line here names the class and contains no Mojang code at all.
 #
 #   delete  <fully.qualified.ClassName>
-#   replace <fully.qualified.ClassName>  <repo-relative path to Incari's replacement source>
+#   replace <fully.qualified.ClassName>  <repo-relative path to Incari's replacement source>  <stamp>
+#
+# The stamp (<version>@<vendor blob>) names the Mojang original each replacement was last checked
+# against. `./incari apply` warns and `./incari rebuild --check` fails when that original changes
+# (a new Minecraft version): bring the replacement in line, then `./incari classes --stamp`.
 #
 # Only top-level classes; nested classes go with their outer class. Patches may not touch
 # a class listed here: edit the replacement source instead.
 
 # Window, input, displays and the shell over the Platform interfaces. The replacements are
 # Incari code in client/: they keep the game's API and delegate to incari.platform.api.
-replace com.mojang.blaze3d.Blaze3D                          client/src/main/java/com/mojang/blaze3d/Blaze3D.java
-replace com.mojang.blaze3d.platform.ClipboardManager        client/src/main/java/com/mojang/blaze3d/platform/ClipboardManager.java
-replace com.mojang.blaze3d.platform.MacosUtil               client/src/main/java/com/mojang/blaze3d/platform/MacosUtil.java
-replace com.mojang.blaze3d.platform.MessageBox              client/src/main/java/com/mojang/blaze3d/platform/MessageBox.java
-replace com.mojang.blaze3d.platform.Monitor                 client/src/main/java/com/mojang/blaze3d/platform/Monitor.java
-replace com.mojang.blaze3d.platform.MonitorManager          client/src/main/java/com/mojang/blaze3d/platform/MonitorManager.java
-replace com.mojang.blaze3d.platform.SDLEventHandler         client/src/main/java/com/mojang/blaze3d/platform/SDLEventHandler.java
-replace com.mojang.blaze3d.platform.TextInputManager        client/src/main/java/com/mojang/blaze3d/platform/TextInputManager.java
-replace com.mojang.blaze3d.platform.Window                  client/src/main/java/com/mojang/blaze3d/platform/Window.java
-replace com.mojang.blaze3d.platform.cursor.CursorType       client/src/main/java/com/mojang/blaze3d/platform/cursor/CursorType.java
+replace com.mojang.blaze3d.Blaze3D                          client/src/main/java/com/mojang/blaze3d/Blaze3D.java                                    26.3@477574a0bbe9
+replace com.mojang.blaze3d.platform.ClipboardManager        client/src/main/java/com/mojang/blaze3d/platform/ClipboardManager.java                  26.3@7d220af4f689
+replace com.mojang.blaze3d.platform.MacosUtil               client/src/main/java/com/mojang/blaze3d/platform/MacosUtil.java                         26.3@2a8d41c7c0f5
+replace com.mojang.blaze3d.platform.MessageBox              client/src/main/java/com/mojang/blaze3d/platform/MessageBox.java                        26.3@699cbf8eed14
+replace com.mojang.blaze3d.platform.Monitor                 client/src/main/java/com/mojang/blaze3d/platform/Monitor.java                           26.3@9199b7c30832
+replace com.mojang.blaze3d.platform.MonitorManager          client/src/main/java/com/mojang/blaze3d/platform/MonitorManager.java                    26.3@6067cd77eee4
+replace com.mojang.blaze3d.platform.SDLEventHandler         client/src/main/java/com/mojang/blaze3d/platform/SDLEventHandler.java                   26.3@fdaf9c5ffe39
+replace com.mojang.blaze3d.platform.TextInputManager        client/src/main/java/com/mojang/blaze3d/platform/TextInputManager.java                  26.3@31d2dd96a034
+replace com.mojang.blaze3d.platform.Window                  client/src/main/java/com/mojang/blaze3d/platform/Window.java                            26.3@4365a5d969d1
+replace com.mojang.blaze3d.platform.cursor.CursorType       client/src/main/java/com/mojang/blaze3d/platform/cursor/CursorType.java                 26.3@ef3b3d6a3664
 # SDL's log hook moved into platform-desktop, which owns SDL.
 delete  com.mojang.blaze3d.platform.SdlDebug
 
 # Audio: com.mojang.blaze3d.audio over PlatformAudio
-replace com.mojang.blaze3d.audio.Library               client/src/main/java/com/mojang/blaze3d/audio/Library.java
-replace com.mojang.blaze3d.audio.Channel               client/src/main/java/com/mojang/blaze3d/audio/Channel.java
-replace com.mojang.blaze3d.audio.Listener              client/src/main/java/com/mojang/blaze3d/audio/Listener.java
-replace com.mojang.blaze3d.audio.SoundBuffer           client/src/main/java/com/mojang/blaze3d/audio/SoundBuffer.java
-replace com.mojang.blaze3d.audio.DeviceList            client/src/main/java/com/mojang/blaze3d/audio/DeviceList.java
-replace com.mojang.blaze3d.audio.CallbackDeviceTracker client/src/main/java/com/mojang/blaze3d/audio/CallbackDeviceTracker.java
+replace com.mojang.blaze3d.audio.Library               client/src/main/java/com/mojang/blaze3d/audio/Library.java                                   26.3@b23cd267db86
+replace com.mojang.blaze3d.audio.Channel               client/src/main/java/com/mojang/blaze3d/audio/Channel.java                                   26.3@192582fbf907
+replace com.mojang.blaze3d.audio.Listener              client/src/main/java/com/mojang/blaze3d/audio/Listener.java                                  26.3@5ea278b76ffd
+replace com.mojang.blaze3d.audio.SoundBuffer           client/src/main/java/com/mojang/blaze3d/audio/SoundBuffer.java                               26.3@4574eade0504
+replace com.mojang.blaze3d.audio.DeviceList            client/src/main/java/com/mojang/blaze3d/audio/DeviceList.java                                26.3@f958789fa011
+replace com.mojang.blaze3d.audio.CallbackDeviceTracker client/src/main/java/com/mojang/blaze3d/audio/CallbackDeviceTracker.java                     26.3@e5020cca7d1c
 delete  com.mojang.blaze3d.audio.OpenAlUtil
 
 # Networking (ADR 0009): server addresses may be ws:// or wss:// URLs, for the WebSocket transport.
-replace net.minecraft.client.multiplayer.resolver.ServerAddress  client/src/main/java/net/minecraft/client/multiplayer/resolver/ServerAddress.java
+replace net.minecraft.client.multiplayer.resolver.ServerAddress  client/src/main/java/net/minecraft/client/multiplayer/resolver/ServerAddress.java  26.3@14a581ac5e01

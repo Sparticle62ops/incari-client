@@ -45,6 +45,45 @@ class ParsingTest {
     }
 
     @Test
+    void classManifestReadsReplacementStamps() {
+        ClassManifest manifest = ClassManifest.parse(
+                List.of("replace a.b.Buffer  render-webgl2/src/Buffer.java  26.3@0123456789ab"), "m");
+
+        assertThat(manifest.entries())
+                .containsExactly(new ClassManifest.Replace(
+                        "a.b.Buffer",
+                        "render-webgl2/src/Buffer.java",
+                        new ClassManifest.Stamp("26.3", "0123456789ab")));
+        assertThatThrownBy(() -> ClassManifest.parse(List.of("replace a.B src/B.java 26.3"), "m"))
+                .hasMessageContaining("not a stamp");
+        assertThatThrownBy(() -> ClassManifest.parse(List.of("replace a.B src/B.java 26.3@xyz"), "m"))
+                .hasMessageContaining("not a stamp");
+    }
+
+    @Test
+    void stampsAreWrittenInOneColumnAndEverythingElseIsKept() {
+        List<String> lines = List.of(
+                "# comment",
+                "delete  a.Gone",
+                "replace a.Short  src/Short.java",
+                "replace a.LongerName  src/LongerName.java  26.2@aaaaaaaaaaaa   # note");
+        var stamps = new java.util.LinkedHashMap<String, ClassManifest.Stamp>();
+        stamps.put("a.Short", new ClassManifest.Stamp("26.3", "111111111111"));
+        stamps.put("a.LongerName", new ClassManifest.Stamp("26.3", "222222222222"));
+
+        List<String> stamped = ClassManifest.withStamps(lines, stamps);
+
+        assertThat(stamped)
+                .containsExactly(
+                        "# comment",
+                        "delete  a.Gone",
+                        "replace a.Short  src/Short.java            26.3@111111111111",
+                        "replace a.LongerName  src/LongerName.java  26.3@222222222222   # note");
+        assertThat(ClassManifest.withStamps(stamped, stamps)).isEqualTo(stamped);
+        assertThat(ClassManifest.parse(stamped, "m").entries()).hasSize(3);
+    }
+
+    @Test
     void patchFileNamesComeFromTheSubject() {
         assertThat(PatchSet.fileFor(3, "render: Route section compile to the mesher"))
                 .isEqualTo("render/0003-route-section-compile-to-the-mesher.patch");

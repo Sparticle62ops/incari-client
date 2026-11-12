@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The editable client tree in {@code work/client}: a git repository whose history is
@@ -84,6 +85,8 @@ public final class ClientTree {
         writeAttributes();
 
         applyManifest();
+        // Before the patches: a conflict there stops the apply, and this is the bump's other half.
+        reportDrift(replacementDrift(version), version);
         applyPatches();
         recordSyncedHead();
     }
@@ -326,6 +329,89 @@ public final class ClientTree {
                 Files.delete(dir);
             }
         }
+    }
+
+    // ------------------------------------------------------------------------------------
+    // Replacement stamps: has Mojang changed a class Incari replaces?
+    // ------------------------------------------------------------------------------------
+
+    /**
+     * A replaced class whose vendor original isn't the one its stamp in {@code classes.txt} names
+     * (or that has no stamp yet). {@code recorded} is null when there's no stamp.
+     */
+    public record Drift(
+            String className, ClassManifest.@Nullable Stamp recorded, ClassManifest.Stamp current, String path) {}
+
+    /**
+     * Each replaced class whose decompiled original differs from the one it was last checked
+     * against, read from the {@code vendor} commit, so it works mid-apply too.
+     */
+    public List<Drift> replacementDrift(String version) throws IOException, InterruptedException {
+        requireTree();
+        List<Drift> drift = new ArrayList<>();
+        for (ClassManifest.Entry entry : ClassManifest.load(ws.classManifest()).entries()) {
+            if (!(entry instanceof ClassManifest.Replace replace)) {
+                continue;
+            }
+            ClassManifest.Stamp current = vendorStamp(replace, version);
+            ClassManifest.@Nullable Stamp recorded = replace.stamp();
+            if (recorded == null || !recorded.matches(current.blob())) {
+                drift.add(new Drift(replace.className(), recorded, current, replace.treePath()));
+            }
+        }
+        return drift;
+    }
+
+    /** Records the current vendor original of every replaced class in {@code classes.txt}. */
+    public int stampReplacements(String version) throws IOException, InterruptedException {
+        requireTree();
+        Map<String, ClassManifest.Stamp> stamps = new LinkedHashMap<>();
+        for (ClassManifest.Entry entry : ClassManifest.load(ws.classManifest()).entries()) {
+            if (entry instanceof ClassManifest.Replace replace) {
+                stamps.put(replace.className(), vendorStamp(replace, version));
+            }
+        }
+        List<String> lines = Files.readAllLines(ws.classManifest());
+        List<String> stamped = ClassManifest.withStamps(lines, stamps);
+        if (!stamped.equals(lines)) {
+            Files.write(ws.classManifest(), stamped);
+        }
+        return stamps.size();
+    }
+
+    /** Logs each drifted replacement, with the command that shows what Mojang changed. */
+    public void reportDrift(List<Drift> drift, String version) {
+        for (Drift d : drift) {
+            if (d.recorded() == null) {
+                Log.warn(d.className() + " is replaced but has no stamp in patches/classes.txt");
+                continue;
+            }
+            Log.warn(d.className() + " changed upstream: replacement written against " + d.recorded()
+                    + ", vendor is now " + d.current());
+            String relative = d.path().substring(Workspace.CLIENT_SOURCE_DIR.length() + 1);
+            Path old = ws.decompiledDir(d.recorded().version()).resolve(relative);
+            Path now = ws.decompiledDir(version).resolve(relative);
+            if (!d.recorded().version().equals(version) && Files.isRegularFile(old)) {
+                Log.info("see what changed: git diff --no-index "
+                        + ws.repoRoot().relativize(old) + " " + ws.repoRoot().relativize(now));
+            } else if (d.recorded().version().equals(version)) {
+                Log.info("same version, different decompiled source: a decompiler change?");
+            }
+        }
+        if (!drift.isEmpty()) {
+            Log.info("Bring each replacement in line with the new original, then: ./incari classes --stamp");
+        }
+    }
+
+    private ClassManifest.Stamp vendorStamp(ClassManifest.Replace replace, String version)
+            throws IOException, InterruptedException {
+        ProcessRunner.Result result =
+                git.tryRun("rev-parse", "--verify", "--quiet", VENDOR_TAG + ":" + replace.treePath());
+        if (result.exitCode() != 0) {
+            throw new CliException(ClassManifest.FILE_NAME + ": " + replace.className()
+                    + " isn't in the vendor tree (renamed or removed in this Minecraft version?)");
+        }
+        return new ClassManifest.Stamp(version, result.stdout().strip().substring(0, ClassManifest.STAMP_DIGITS));
     }
 
     // ------------------------------------------------------------------------------------

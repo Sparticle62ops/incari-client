@@ -184,6 +184,39 @@ class ClientTreeTest {
     }
 
     @Test
+    void replacementsAreFlaggedWhenTheirOriginalChanges() throws Exception {
+        Path replacement = root.resolve("memory/src/Buffer.java");
+        Files.createDirectories(replacement.getParent());
+        Files.writeString(replacement, "package com.example;\n\npublic class Buffer { /* Incari */ }\n");
+        Files.createDirectories(ws.patchesDir());
+        Files.writeString(ws.classManifest(), "replace com.example.Buffer  memory/src/Buffer.java\n");
+
+        tree.apply(decompiled, "test", false);
+        assertThat(tree.replacementDrift("test"))
+                .singleElement()
+                .satisfies(d -> assertThat(d.recorded()).isNull());
+
+        assertThat(tree.stampReplacements("test")).isEqualTo(1);
+        assertThat(Files.readString(ws.classManifest())).matches("(?s).*memory/src/Buffer\\.java  test@[0-9a-f]{12}\n");
+        assertThat(tree.replacementDrift("test")).isEmpty();
+
+        // The next "Minecraft version" changes the original the replacement was written against.
+        Files.writeString(
+                decompiled.resolve("com/example/Buffer.java"),
+                "package com.example;\n\npublic class Buffer { long pointer; }\n");
+        Files.writeString(decompiled.resolve(".incari-decompile-stamp"), "stamp-2");
+        tree.apply(decompiled, "next", false);
+
+        assertThat(tree.replacementDrift("next")).singleElement().satisfies(d -> {
+            assertThat(d.className()).isEqualTo("com.example.Buffer");
+            assertThat(d.recorded().version()).isEqualTo("test");
+            assertThat(d.current().version()).isEqualTo("next");
+        });
+        tree.stampReplacements("next");
+        assertThat(tree.replacementDrift("next")).isEmpty();
+    }
+
+    @Test
     void manifestEntryForAMissingClassFailsClearly() throws Exception {
         Files.createDirectories(ws.patchesDir());
         Files.writeString(ws.classManifest(), "delete com.example.Gone\n");
