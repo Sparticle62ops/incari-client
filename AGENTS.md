@@ -22,6 +22,7 @@ it. Top priority: performance on typical crappy school Chromebooks.
 | Why it's built this way | [`docs/adr/README.md`](docs/adr/README.md) |
 | Threads in the browser | [`docs/threading.md`](docs/threading.md) |
 | Measuring performance | [`docs/benchmark.md`](docs/benchmark.md) |
+| Moving to a new Minecraft release | [`docs/updating.md`](docs/updating.md) |
 
 ## Hard rules
 
@@ -45,6 +46,7 @@ Needs JDK 25+, git and Node 24+.
 ./gradlew spotlessApply        # format Java
 npm ci && npm run check        # TypeScript
 ./incari rebuild [--check]     # work/client commits -> patches/ (--check: fail if stale)
+./incari classes [--stamp]     # replaced classes whose Mojang original changed (--stamp: reviewed)
 ./incari copycheck             # nothing copied from the game
 tools/ci/check-patch-budget.sh # patch size against patches/budget.properties
 
