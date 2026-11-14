@@ -5,7 +5,9 @@ import incari.platform.api.net.PlatformNetwork;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSObject;
@@ -93,6 +95,17 @@ final class WebSocketNetwork implements PlatformNetwork {
         private boolean closedByUs;
         private boolean finished;
 
+        // For details(), the game's thread only.
+        /** The longest a browser event waited in the queue before the game read it, in ms. */
+        private double longestQueueWait;
+
+        private int closeCode = -1;
+        private String closeReason = "";
+        /** Bytes the browser still held unsent when the socket closed; -1 if it didn't close itself. */
+        private double unsentAtClose = -1;
+
+        private boolean onlineAtClose = true;
+
         Socket(String description, NetConnection.Listener listener, @Nullable JSObject handle) {
             this.description = description;
             this.listener = listener;
@@ -162,7 +175,9 @@ final class WebSocketNetwork implements PlatformNetwork {
                 return;
             }
             int count = queued(socket);
+            double now = now();
             for (int i = 0; i < count && !finished; i++) {
+                longestQueueWait = Math.max(longestQueueWait, now - queuedTime(socket, i));
                 switch (queuedType(socket, i)) {
                     case "open" -> {
                         if (!closedByUs) {
@@ -184,6 +199,10 @@ final class WebSocketNetwork implements PlatformNetwork {
                     case "close" -> {
                         int code = queuedCode(socket, i);
                         String reason = queuedReason(socket, i);
+                        closeCode = code;
+                        closeReason = reason;
+                        unsentAtClose = queuedUnsent(socket, i);
+                        onlineAtClose = queuedOnline(socket, i);
                         boolean clean = code == 1000 || code == 1001 || closedByUs;
                         finish(
                                 clean
@@ -204,6 +223,24 @@ final class WebSocketNetwork implements PlatformNetwork {
             }
         }
 
+        @Override
+        public Map<String, String> details() {
+            Map<String, String> details = new LinkedHashMap<>();
+            if (closeCode >= 0) {
+                details.put(
+                        "Close code",
+                        closeCode(closeCode) + (closeReason.isEmpty() ? "" : ", \"" + closeReason + "\""));
+                details.put("Unsent at close", Math.round(unsentAtClose) + " B");
+                details.put("Browser online", onlineAtClose ? "Yes" : "No, it had lost the network");
+            } else if (closedByUs) {
+                details.put("Close code", "Closed by this game");
+            }
+            if (handle != null) {
+                details.put("Longest game stall", Math.round(longestQueueWait) + " ms");
+            }
+            return details;
+        }
+
         private void finish(@Nullable Throwable cause) {
             finished = true;
             open = false;
@@ -211,20 +248,46 @@ final class WebSocketNetwork implements PlatformNetwork {
         }
     }
 
+    /** A WebSocket close code with what it means. */
+    static String closeCode(int code) {
+        String meaning =
+                switch (code) {
+                    case 1000 -> "normal close";
+                    case 1001 -> "server going away or page leaving";
+                    case 1002 -> "protocol error";
+                    case 1003 -> "unsupported data";
+                    case 1005 -> "no code given";
+                    case 1006 -> "dropped with no close message";
+                    case 1007 -> "invalid text";
+                    case 1008 -> "policy violation";
+                    case 1009 -> "message too big";
+                    case 1011 -> "server error";
+                    case 1012 -> "server restarting";
+                    case 1013 -> "try again later";
+                    case 1015 -> "TLS failed";
+                    default -> "";
+                };
+        return code + (meaning.isEmpty() ? "" : " (" + meaning + ")");
+    }
+
     // --- The page side ---------------------------------------------------------------------
 
     /*
      * Each socket keeps a queue of what happened, as arrays: ["open"], ["message", ArrayBuffer],
-     * ["text", string] (Eagler's query answers), ["close", code, reason], ["error"].
+     * ["text", string] (Eagler's query answers), ["close", code, reason, unsent bytes, online],
+     * ["error"]. __incariTimes holds when each entry was queued (performance.now()), for details().
      */
     @JSBody(
             params = "url",
             script = "var ws = new WebSocket(url); ws.binaryType = 'arraybuffer'; var q = []; ws.__incariQueue = q;"
-                    + "ws.onopen = function() { q.push(['open']); };"
+                    + "var t = []; ws.__incariTimes = t;"
+                    + "function add(e) { q.push(e); t.push(performance.now()); }"
+                    + "ws.onopen = function() { add(['open']); };"
                     + "ws.onmessage = function(e) {"
-                    + "  q.push(typeof e.data === 'string' ? ['text', e.data] : ['message', e.data]); };"
-                    + "ws.onerror = function() { q.push(['error']); };"
-                    + "ws.onclose = function(e) { q.push(['close', e.code, e.reason || '']); };"
+                    + "  add(typeof e.data === 'string' ? ['text', e.data] : ['message', e.data]); };"
+                    + "ws.onerror = function() { add(['error']); };"
+                    + "ws.onclose = function(e) { add(['close', e.code, e.reason || '', ws.bufferedAmount,"
+                    + "  typeof navigator === 'undefined' || navigator.onLine !== false]); };"
                     + "return ws;")
     private static native JSObject open(String url);
 
@@ -281,7 +344,25 @@ final class WebSocketNetwork implements PlatformNetwork {
     private static native String queuedReason(JSObject ws, int index);
 
     @JSBody(
+            params = {"ws", "index"},
+            script = "return ws.__incariTimes[index];")
+    private static native double queuedTime(JSObject ws, int index);
+
+    @JSBody(
+            params = {"ws", "index"},
+            script = "return +ws.__incariQueue[index][3] || 0;")
+    private static native double queuedUnsent(JSObject ws, int index);
+
+    @JSBody(
+            params = {"ws", "index"},
+            script = "return ws.__incariQueue[index][4] !== false;")
+    private static native boolean queuedOnline(JSObject ws, int index);
+
+    @JSBody(script = "return performance.now();")
+    private static native double now();
+
+    @JSBody(
             params = {"ws", "count"},
-            script = "ws.__incariQueue.splice(0, count);")
+            script = "ws.__incariQueue.splice(0, count); ws.__incariTimes.splice(0, count);")
     private static native void dropQueued(JSObject ws, int count);
 }

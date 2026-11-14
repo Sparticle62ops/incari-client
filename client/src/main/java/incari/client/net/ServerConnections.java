@@ -6,7 +6,9 @@ import incari.client.eagler.EaglerCookies;
 import incari.client.eagler.EaglerJoin;
 import incari.client.eagler.EaglerVoice;
 import incari.client.skins.OwnSkin;
+import incari.net.ConnectionReport;
 import incari.net.MessageFraming;
+import incari.net.NetConnectionChannel;
 import incari.net.WebSocketAddress;
 import incari.net.WebSocketUrl;
 import incari.net.eagler.EaglerHandshake;
@@ -107,6 +109,8 @@ public final class ServerConnections {
     private static volatile boolean lastJoinReachedWorld;
     /** The Eagler stage of the connect screen's last connection, if it was an Eagler one. */
     private static volatile @Nullable EaglerHandshake lastEagler;
+    /** The connect screen's last connection, for Connection Details; null for none. */
+    private static volatile @Nullable NetConnectionChannel lastChannel;
 
     private ServerConnections() {}
 
@@ -124,6 +128,7 @@ public final class ServerConnections {
         lastJoin = new Join(server, address);
         lastWasRelay = false;
         lastJoinReachedWorld = false;
+        lastChannel = null;
         // Set again by connect() for a join that goes through it; a plain TCP join (the desktop's,
         // as the game's own version) doesn't, and mustn't be judged by the last Eagler one's.
         lastEagler = null;
@@ -197,6 +202,10 @@ public final class ServerConnections {
                         }
                         if (plan != null) {
                             lastEagler = eagler;
+                            if (channel instanceof NetConnectionChannel platform) {
+                                // Its report starts at the connect, after this initializer.
+                                lastChannel = platform;
+                            }
                         }
                         // The game logs a connection's failure only as its message; this keeps the stack.
                         pipeline.addLast("incari-errors", new JoinWatch(address, plan != null ? protocol : -1));
@@ -214,6 +223,7 @@ public final class ServerConnections {
     public static ChannelFuture connectRelay(
             final RelayWorldAddress world, final EventLoopGroupHolder eventLoops, final Connection connection) {
         lastWasRelay = true;
+        lastChannel = null;
         if (world.incariProtocol() >= 0) {
             return connectIncariHost(world, eventLoops, connection);
         }
@@ -281,6 +291,12 @@ public final class ServerConnections {
         if (!lastJoinReachedWorld && minecraft.level != null && minecraft.getConnection() != null) {
             lastJoinReachedWorld = true;
         }
+    }
+
+    /** How the connect screen's last connection went; null if it made none. Render thread. */
+    static @Nullable ConnectionReport lastReport() {
+        NetConnectionChannel channel = lastChannel;
+        return channel != null ? channel.report() : null;
     }
 
     /** The join the connect screen last prepared, or null before the first. */

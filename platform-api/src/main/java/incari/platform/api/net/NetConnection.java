@@ -1,6 +1,7 @@
 package incari.platform.api.net;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -41,6 +42,16 @@ public interface NetConnection {
 
     /** A description of the far end for logs, for example "mc.example.com/203.0.113.7:25565". */
     String remoteDescription();
+
+    /**
+     * What the platform alone knows about how the connection went (a WebSocket's close code, how
+     * long the game left its messages waiting), for the disconnect screen's details: label to
+     * value, in order, in plain words. Empty when it has nothing to add. Called on the game's
+     * thread, usually after the connection closed.
+     */
+    default Map<String, String> details() {
+        return Map.of();
+    }
 
     /**
      * Hears what happens on a connection. Callbacks come on a platform thread (the desktop's

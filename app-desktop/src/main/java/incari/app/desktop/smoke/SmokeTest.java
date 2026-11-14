@@ -1,5 +1,6 @@
 package incari.app.desktop.smoke;
 
+import incari.client.net.ConnectionDetailsScreen;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +13,7 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -2735,6 +2737,8 @@ public final class SmokeTest {
             } else {
                 injector().focus();
                 sleep(Duration.ofSeconds(2));
+                connectionDetails();
+                return;
             }
             injector().tap(41, 0x1B); // Escape
             waitUntil(Duration.ofSeconds(3), () -> minecraft.gui.screen() instanceof PauseScreen);
@@ -2745,6 +2749,35 @@ public final class SmokeTest {
                             Duration.ofMinutes(1), () -> minecraft.level == null && minecraft.getConnection() == null),
                     "left the server cleanly");
             sleep(Duration.ofSeconds(2));
+        }
+    }
+
+    /**
+     * Kicked by the server: the disconnection screen offers Connection Details, which shows how the
+     * connection went and returns to it.
+     */
+    private void connectionDetails() {
+        command("kick @s Connection details check");
+        boolean disconnected =
+                waitUntil(Duration.ofSeconds(30), () -> minecraft.gui.screen() instanceof DisconnectedScreen);
+        report.check("kicked", disconnected, stateDescription());
+        if (!disconnected) {
+            return;
+        }
+        sleep(Duration.ofSeconds(1));
+        screenshot("server-disconnected");
+        clickButton("Connection Details");
+        boolean shown =
+                waitUntil(Duration.ofSeconds(5), () -> minecraft.gui.screen() instanceof ConnectionDetailsScreen);
+        sleep(Duration.ofSeconds(1));
+        screenshot("server-connection-details");
+        report.check("connection details", shown, stateDescription());
+        if (shown) {
+            clickButton("gui.back");
+            report.check(
+                    "connection details back",
+                    waitUntil(Duration.ofSeconds(5), () -> minecraft.gui.screen() instanceof DisconnectedScreen),
+                    stateDescription());
         }
     }
 

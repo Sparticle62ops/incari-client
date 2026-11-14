@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -115,6 +116,16 @@ public final class WispConnection implements NetConnection {
     @Override
     public String remoteDescription() {
         return address.toString();
+    }
+
+    /** The proxy's WebSocket's: the Wisp stream's own close reason is already in the error. */
+    @Override
+    public Map<String, String> details() {
+        NetConnection current;
+        synchronized (this) {
+            current = socket;
+        }
+        return current != null ? current.details() : Map.of();
     }
 
     // --- Under the lock ------------------------------------------------------------------------

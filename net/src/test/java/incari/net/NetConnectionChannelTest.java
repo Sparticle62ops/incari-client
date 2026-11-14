@@ -86,6 +86,28 @@ class NetConnectionChannelTest {
     }
 
     @Test
+    void theReportCountsTrafficAndWhoClosed() throws Exception {
+        CompletableFuture<String> reply = new CompletableFuture<>();
+        ChannelFuture connect = bootstrap(reply).connect(InetSocketAddress.createUnresolved("127.0.0.1", 1));
+        assertThat(connect.await(5, TimeUnit.SECONDS)).isTrue();
+        NetConnectionChannel channel = (NetConnectionChannel) connect.channel();
+        channel.writeAndFlush(Unpooled.copiedBuffer("ping", StandardCharsets.UTF_8))
+                .sync();
+        reply.get(5, TimeUnit.SECONDS);
+
+        network.remoteClose();
+        assertThat(channel.closeFuture().await(5, TimeUnit.SECONDS)).isTrue();
+
+        ConnectionReport report = channel.report();
+        assertThat(report).isNotNull();
+        String text = report.asText(System.nanoTime());
+        assertThat(text)
+                .contains("Closed by: The server or the network\n")
+                .contains("Sent: 4 B\n")
+                .contains("Received: 9 B\n");
+    }
+
+    @Test
     void closingTheChannelClosesTheConnection() throws Exception {
         ChannelFuture connect =
                 bootstrap(new CompletableFuture<>()).connect(InetSocketAddress.createUnresolved("127.0.0.1", 1));

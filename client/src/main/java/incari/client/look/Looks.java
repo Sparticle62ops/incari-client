@@ -1,5 +1,6 @@
 package incari.client.look;
 
+import incari.client.net.ConnectionDetailsScreen;
 import incari.client.net.DirectJoinVia;
 import incari.client.net.Reconnect;
 import incari.client.net.WispServers;
@@ -32,5 +33,6 @@ public final class Looks {
         ScreenEdits.edit(ManageServerScreen.class, WispServers::editServerScreen);
         ScreenEdits.edit(DirectJoinServerScreen.class, DirectJoinVia::edit);
         ScreenEdits.edit(DisconnectedScreen.class, Reconnect::edit);
+        ScreenEdits.edit(DisconnectedScreen.class, ConnectionDetailsScreen::edit);
     }
 }

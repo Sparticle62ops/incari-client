@@ -63,6 +63,8 @@ public abstract class NetConnectionChannel extends AbstractChannel {
     private @Nullable ScheduledFuture<?> connectTimeout;
     /** Whether the pipeline asked for data (Netty's read()); event loop only. */
     private boolean readRequested;
+    /** How this connection went, from its connect on; written on the event loop. */
+    private volatile @Nullable ConnectionReport report;
 
     // The config only keeps a reference to the channel; it reads nothing from it while constructed.
     @SuppressWarnings("this-escape")
@@ -98,6 +100,11 @@ public abstract class NetConnectionChannel extends AbstractChannel {
     @Override
     protected ChannelId newId() {
         return new ConnectionId(NEXT_ID.incrementAndGet());
+    }
+
+    /** How this connection went (for the disconnect screen); null before it starts connecting. */
+    public @Nullable ConnectionReport report() {
+        return this.report;
     }
 
     @Override
@@ -176,6 +183,10 @@ public abstract class NetConnectionChannel extends AbstractChannel {
     @Override
     protected void doClose() {
         this.cancelConnectTimeout();
+        ConnectionReport stats = this.report;
+        if (stats != null) {
+            stats.closing(System.nanoTime());
+        }
         this.state = State.CLOSED;
         NetConnection current = this.connection;
         if (current != null) {
@@ -210,6 +221,10 @@ public abstract class NetConnectionChannel extends AbstractChannel {
                 ByteBuffer copy = ByteBuffer.allocate(buffer.readableBytes());
                 buffer.getBytes(buffer.readerIndex(), copy);
                 copy.flip();
+                ConnectionReport stats = this.report;
+                if (stats != null) {
+                    stats.sent(System.nanoTime(), copy.remaining());
+                }
                 current.send(copy);
                 outbound.remove();
             } else {
@@ -254,6 +269,8 @@ public abstract class NetConnectionChannel extends AbstractChannel {
             NetConnectionChannel.this.state = State.CONNECTING;
             NetConnectionChannel.this.remoteAddress = address;
             NetConnectionChannel.this.connectPromise = promise;
+            ConnectionReport stats = new ConnectionReport(address);
+            NetConnectionChannel.this.report = stats;
             int millis = NetConnectionChannel.this.config.getConnectTimeoutMillis();
             if (millis > 0) {
                 NetConnectionChannel.this.connectTimeout = NetConnectionChannel.this
@@ -263,7 +280,9 @@ public abstract class NetConnectionChannel extends AbstractChannel {
                                 millis,
                                 TimeUnit.MILLISECONDS);
             }
-            NetConnectionChannel.this.connection = NetConnectionChannel.this.open(address, new EventLoopListener());
+            NetConnection opened = NetConnectionChannel.this.open(address, new EventLoopListener());
+            stats.opening(opened);
+            NetConnectionChannel.this.connection = opened;
         }
     }
 
@@ -324,6 +343,10 @@ public abstract class NetConnectionChannel extends AbstractChannel {
             return;
         }
         this.state = State.ACTIVE;
+        ConnectionReport stats = this.report;
+        if (stats != null) {
+            stats.connected(System.nanoTime());
+        }
         if (promise.trySuccess()) {
             this.pipeline().fireChannelActive();
         } else {
@@ -337,6 +360,10 @@ public abstract class NetConnectionChannel extends AbstractChannel {
             data.release();
             return;
         }
+        ConnectionReport stats = this.report;
+        if (stats != null) {
+            stats.received(System.nanoTime(), data.readableBytes());
+        }
         this.unread.add(data);
         if (this.config.isAutoRead()) {
             this.readRequested = true;
@@ -346,6 +373,12 @@ public abstract class NetConnectionChannel extends AbstractChannel {
 
     private void onClosed(final @Nullable Throwable cause) {
         this.cancelConnectTimeout();
+        ConnectionReport stats = this.report;
+        if (stats != null) {
+            // Before the pipeline hears of it: the game closes the channel in answer, which isn't
+            // this game closing it.
+            stats.closedRemotely(System.nanoTime(), cause);
+        }
         ChannelPromise promise = this.connectPromise;
         this.connectPromise = null;
         if (promise != null) {
