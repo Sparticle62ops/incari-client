@@ -177,8 +177,10 @@ public final class WorldWorker {
         LevelLoadListener progress =
                 LevelLoadListener.compose(new ProgressToPage(), LoggingLevelLoadListener.forSingleplayer());
         GameProfile owner = new GameProfile(start.hostId(), start.hostName());
+        // Offline: the online discovery service fetches from Mojang the moment it's made, and the
+        // browser build never calls Mojang's services (OnlineServices).
         Services services = Services.create(
-                MinecraftServicesDiscoveryService.create(Proxy.NO_PROXY, false), gameDirectory.toFile());
+                MinecraftServicesDiscoveryService.createOffline(Proxy.NO_PROXY), gameDirectory.toFile());
         return MinecraftServer.spin(thread -> new WorkerServer(
                 thread,
                 access,

@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: incari-client <335801235+incari-client@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 22:10:18 -0500
+Subject: [PATCH] skins: Profile textures read without Mojang's services
+
+With Mojang's services off, the session service has no texture host
+list or keys, so every skin and custom head stayed the default.
+
+Signed-off-by: incari-client <335801235+incari-client@users.noreply.github.com>
+
+diff --git a/src/main/java/net/minecraft/client/resources/SkinManager.java b/src/main/java/net/minecraft/client/resources/SkinManager.java
+index 26dfcdffa8e77cc24db21ada0f564366298736ac..27a1bad4c5a52dbb8cddec953c9e604868b4b738 100644
+--- a/src/main/java/net/minecraft/client/resources/SkinManager.java
++++ b/src/main/java/net/minecraft/client/resources/SkinManager.java
+@@ -59,3 +59,5 @@
+ 
+-                                MinecraftProfileTextures textures = services.sessionService().unpackTextures(packedTextures);
++                                // Incari start: read without Mojang's services where they're off
++                                MinecraftProfileTextures textures = incari.client.skins.ProfileTextures.unpack(services, packedTextures);
++                                // Incari end
+                                 if (textures.signatureState() == SignatureState.INVALID) {

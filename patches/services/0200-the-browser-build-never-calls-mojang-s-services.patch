@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: incari-client <335801235+incari-client@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 22:10:17 -0500
+Subject: [PATCH] services: The browser build never calls Mojang's services
+
+Minecraft builds an online discovery service, which starts fetching
+from Mojang (and retrying) the moment it's made. Where the platform
+has Mojang's services off, it gets the offline one instead.
+
+Signed-off-by: incari-client <335801235+incari-client@users.noreply.github.com>
+
+diff --git a/src/main/java/net/minecraft/client/Minecraft.java b/src/main/java/net/minecraft/client/Minecraft.java
+index 7117115086828a8964bdac09d8327aaf5a80f051..22cd86951c3fd35a2461577ae0ea9b0295d4b920 100644
+--- a/src/main/java/net/minecraft/client/Minecraft.java
++++ b/src/main/java/net/minecraft/client/Minecraft.java
+@@ -409,3 +409,5 @@
+         this.offlineDeveloperMode = gameConfig.game.offlineDeveloperMode;
+-        MinecraftServicesDiscoveryService discoveryService = MinecraftServicesDiscoveryService.create(this.proxy, !this.offlineDeveloperMode);
++        // Incari start: the browser build never calls Mojang's services
++        MinecraftServicesDiscoveryService discoveryService = incari.client.platform.OnlineServices.discovery(this.proxy, !this.offlineDeveloperMode);
++        // Incari end
+         this.services = Services.create(discoveryService, this.gameDirectory);

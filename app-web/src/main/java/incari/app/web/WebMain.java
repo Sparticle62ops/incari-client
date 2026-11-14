@@ -163,6 +163,8 @@ public final class WebMain {
         WebCredits.install();
         // Realms is stripped from the browser build (tools/survey/rules.txt).
         OnlineServices.disableRealms();
+        // Nor does it call Mojang's other services: no discovery, profile, key or telemetry requests.
+        OnlineServices.disableMojang();
         // No sockets, so no selector for Netty's event loops to wait on (ADR 0008).
         PlatformEventLoopGroupHolder.useLocalEventLoops();
         // Terrain meshing (ADR 0023): Incari's mesher in Web Workers, writing the compact
@@ -338,6 +340,8 @@ public final class WebMain {
             WebStorage.DEFAULT.assetsDirectory(),
             "--accessToken",
             "0",
+            // No profile, user property or chat key requests to Mojang (OnlineServices).
+            "--offlineDeveloperMode",
             "--username",
             // A first start suggests a name of its own, as Eagler clients do; Edit Profile keeps it.
             name.isEmpty() ? PlayerName.suggest(new Random()) : name

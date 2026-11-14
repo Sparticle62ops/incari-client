@@ -92,3 +92,4 @@ when you make a decision someone would otherwise have to rediscover.
 | [0071](0071-via-off-by-default.md) | Via is off unless the player turns it on |
 | [0072](0072-hidden-page-wakeups.md) | A hidden page keeps time in a worker, so servers don't time it out |
 | [0073](0073-combat-prediction-not-automation.md) | Combat modules predict; they never play for the player |
+| [0074](0074-no-mojang-services-in-the-browser.md) | The browser build never calls Mojang's services on its own |
