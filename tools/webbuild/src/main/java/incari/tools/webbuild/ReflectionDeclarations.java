@@ -26,6 +26,12 @@ public final class ReflectionDeclarations extends SimpleReflectionPolicy {
         // ServerConnectionListener.startMemoryChannel and the client's in Connection.connectToLocalServer.
         type("io.netty.channel.local.LocalServerChannel").reflectableMethods(named("<init>"));
         type("io.netty.channel.local.LocalChannel").reflectableMethods(named("<init>"));
+        // The game's client channel, which vanilla bootstraps still name by class: the server
+        // list's legacy ping (ServerStatusPinger.pingLegacyServer, after a failed ping) and
+        // Connection.connect for a plain address. Without it they throw instead of failing to
+        // connect, and the legacy ping runs on the game thread: the game crashed on the "Saving
+        // world" screen every time the server list opened with a server it couldn't ping.
+        type("incari.client.net.PlatformSocketChannel").reflectableMethods(named("<init>"));
         // The ender dragon's phases are made by reflection (EnderDragonPhase.createInstance:
         // getConstructor(EnderDragon.class).newInstance), when a dragon is created: on the client,
         // as soon as the player sees one in the End (the screenshot scenes found it).

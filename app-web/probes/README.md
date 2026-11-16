@@ -14,6 +14,7 @@ app-web/probes/run.sh <Name> [Gradle options]   # for example -Pteavm.fast, -Pbr
 | `ArrayDequeProbe` | Regression | tools/teavm-patches' TArrayDeque fix |
 | `ArrayInstanceOfProbe` | Regression | Via's StructuredItemRewriter |
 | `ByteCopyProbe` | Measurement | How bytes cross between Java arrays and JavaScript buffers |
+| `ChannelClassProbe` | Check | `Bootstrap.channel(Class)` throws for a channel class ReflectionDeclarations doesn't declare |
 | `CoroutineCostProbe` | Measurement | What TeaVM's coroutine transformation costs ordinary code (ADR 0036) |
 | `DeflateProbe` | Check | The build's deflate and inflate streams, used as the game writes chunks and NBT |
 | `DirectAllocationProbe` | Regression | Heap growth (a tools/teavm-patches fix until TeaVM 0.16.0 had it) |
