@@ -28,6 +28,7 @@ for the browser build only. The desktop runs on a real JDK and never loads it.
 | `ThreadLocal` reads a weak map (a JavaScript call) every time | `TThreadLocal` caches the last thread's slot (11,000 → 900 calls/s) |
 | `ConcurrentMap.computeIfAbsent` returns null after inserting | `TConcurrentMap` has correct defaults |
 | `Files.find` fails on non-matching directories | `FilesAdditions.find` replaces it |
+| `Inflater.reset` starts a new zlib stream (32 KB window) for every packet | `TInflater` and `TDeflater` reset in place, through jzlib's package (`com.jcraft.jzlib.StreamResets`; ADR 0075, `InflatePacketProbe`) |
 | `java.lang.invoke` is empty, so `MethodHandles.lookup()` fails | A lookup that finds nothing, so libraries fall back |
 | `Class.forName("java.lang.Float")` fails | JOML's `Runtime` is substituted |
 | Some methods are `@UnsupportedOn(WEBASSEMBLY_GC)` | An addition with the same signature replaces them |

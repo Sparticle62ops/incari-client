@@ -59,4 +59,5 @@ a way to name a WebSocket server, and message framing. Via and the Eagler handsh
 - A transfer packet may name a `ws://` URL as its host, so servers can move browser players.
 - The bandwidth chart counts packets without TCP's length prefix.
 - Network events reach the game once per frame, which bounds reading in a throttled hidden tab
-  (ADR 0006's quarter-second fallback keeps the connection alive).
+  (ADR 0006's quarter-second fallback keeps the connection alive). Since ADR 0075 a message also
+  wakes the game's thread between frames, and the connection's thread reads it at once.
