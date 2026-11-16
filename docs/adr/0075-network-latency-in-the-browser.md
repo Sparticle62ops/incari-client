@@ -72,5 +72,10 @@ deflate **74.5 → 60.4 µs**, and no 32 KB window or deflate state allocated pe
 - **Running every due event on a wake:** decoded in 0.5 ms, but it pulled the background pool's
   meshing out of its idle slots into the tasks before a frame. Lobby slowest frames +7 ms.
 - **`MessageChannel` wake-ups on the page** (ADR 0043): later still in play (~70 ms).
+- **Waking the event loop for a sent packet as the frame ends** (marked wake-ups run when the
+  frame's callback returns): no change. A packet the game sends reaches its event loop ~3-8 ms
+  later in the flythrough and combat and ~26-30 ms in the lobby, with or without it: the send's
+  wake isn't held back as a message's was; the loop just waits for the render thread to finish
+  its frame. Less would need the pipeline to run on the render thread.
 - **Per-message delivery cost** (`SocketDeliveryProbe`): 0.49 µs a message, nearly all the copy
   out of the page's buffer. Not worth changing.
