@@ -21,8 +21,10 @@ import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 
@@ -38,6 +40,9 @@ import org.jspecify.annotations.Nullable;
 public abstract class NetConnectionChannel extends AbstractChannel {
 
     private static final ChannelMetadata METADATA = new ChannelMetadata(false);
+    /** The connection opened (an {@link #inbox} entry). */
+    private static final Object CONNECTED = new Object();
+
     private static final AtomicLong NEXT_ID = new AtomicLong();
 
     private enum State {
@@ -50,6 +55,14 @@ public abstract class NetConnectionChannel extends AbstractChannel {
     private final ChannelConfig config = new DefaultChannelConfig(this);
     /** Bytes that arrived while the pipeline wasn't reading (auto-read off). Event loop only. */
     private final Queue<ByteBuf> unread = new ArrayDeque<>();
+    /**
+     * What the platform reported, in order, for the event loop to take in one task: a {@link ByteBuf},
+     * {@link #CONNECTED} or a {@link Closed}. The browser hands over a frame's messages at once, and a
+     * task each cost a wake-up of the loop and a read-complete through the pipeline per message.
+     */
+    private final Queue<Object> inbox = new ConcurrentLinkedQueue<>();
+    /** Whether a task to drain {@link #inbox} is queued on the event loop and hasn't started yet. */
+    private final AtomicBoolean drainQueued = new AtomicBoolean();
 
     private volatile State state = State.OPEN;
     private volatile @Nullable NetConnection connection;
@@ -315,23 +328,62 @@ public abstract class NetConnectionChannel extends AbstractChannel {
         }
     }
 
-    /** Moves each platform callback onto the channel's event loop, where Netty expects it. */
+    /** Moves the platform's callbacks onto the channel's event loop, where Netty expects them. */
     private final class EventLoopListener implements NetConnection.Listener {
 
         @Override
         public void connected() {
-            NetConnectionChannel.this.eventLoop().execute(NetConnectionChannel.this::onConnected);
+            NetConnectionChannel.this.post(CONNECTED);
         }
 
         @Override
         public void received(final ByteBuffer data) {
-            ByteBuf buffer = Unpooled.wrappedBuffer(data);
-            NetConnectionChannel.this.eventLoop().execute(() -> NetConnectionChannel.this.onReceived(buffer));
+            NetConnectionChannel.this.post(Unpooled.wrappedBuffer(data));
         }
 
         @Override
         public void closed(final @Nullable Throwable cause) {
-            NetConnectionChannel.this.eventLoop().execute(() -> NetConnectionChannel.this.onClosed(cause));
+            NetConnectionChannel.this.post(new Closed(cause));
+        }
+    }
+
+    /** How the connection closed (an {@link #inbox} entry). */
+    private record Closed(@Nullable Throwable cause) {}
+
+    /** Queues a platform event; the first since the last drain asks the event loop for one. Any thread. */
+    private void post(final Object event) {
+        this.inbox.add(event);
+        if (this.drainQueued.compareAndSet(false, true)) {
+            this.eventLoop().execute(this::drainInbox);
+        }
+    }
+
+    /**
+     * Takes in everything the platform reported, in order: reads go to the pipeline together, with
+     * one read-complete for each run of them. Event loop only.
+     */
+    private void drainInbox() {
+        // Cleared first: an event posted from now on either is taken below or queues another drain.
+        this.drainQueued.set(false);
+        boolean reading = false;
+        Object event;
+        while ((event = this.inbox.poll()) != null) {
+            if (event instanceof ByteBuf data) {
+                reading |= this.onReceived(data);
+                continue;
+            }
+            if (reading) {
+                this.deliverUnread();
+                reading = false;
+            }
+            if (event == CONNECTED) {
+                this.onConnected();
+            } else if (event instanceof Closed closed) {
+                this.onClosed(closed.cause());
+            }
+        }
+        if (reading) {
+            this.deliverUnread();
         }
     }
 
@@ -355,10 +407,11 @@ public abstract class NetConnectionChannel extends AbstractChannel {
         }
     }
 
-    private void onReceived(final ByteBuf data) {
+    /** Holds the bytes for the pipeline; true if they're to be delivered (the channel is active). */
+    private boolean onReceived(final ByteBuf data) {
         if (this.state != State.ACTIVE) {
             data.release();
-            return;
+            return false;
         }
         ConnectionReport stats = this.report;
         if (stats != null) {
@@ -368,7 +421,7 @@ public abstract class NetConnectionChannel extends AbstractChannel {
         if (this.config.isAutoRead()) {
             this.readRequested = true;
         }
-        this.deliverUnread();
+        return true;
     }
 
     private void onClosed(final @Nullable Throwable cause) {

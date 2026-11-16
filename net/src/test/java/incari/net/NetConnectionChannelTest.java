@@ -158,6 +158,63 @@ class NetConnectionChannelTest {
         assertThat(connect.channel().isActive()).isTrue();
     }
 
+    @Test
+    void aBurstReachesThePipelineInOrderAsOneReadThenTheClose() throws Exception {
+        List<String> seen = new CopyOnWriteArrayList<>();
+        java.util.concurrent.CountDownLatch inactive = new java.util.concurrent.CountDownLatch(1);
+        ChannelFuture connect = new Bootstrap()
+                .group(loop)
+                .channelFactory(() -> new TestChannel(network))
+                .handler(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelRead(ChannelHandlerContext ctx, Object message) {
+                        ByteBuf data = (ByteBuf) message;
+                        seen.add(data.toString(StandardCharsets.UTF_8));
+                        data.release();
+                    }
+
+                    @Override
+                    public void channelReadComplete(ChannelHandlerContext ctx) {
+                        seen.add("complete");
+                    }
+
+                    @Override
+                    public void channelInactive(ChannelHandlerContext ctx) {
+                        seen.add("inactive");
+                        inactive.countDown();
+                    }
+                })
+                .connect(InetSocketAddress.createUnresolved("127.0.0.1", 1));
+        assertThat(connect.await(5, TimeUnit.SECONDS)).isTrue();
+        NetConnection.Listener listener = network.listener;
+        assertThat(listener).isNotNull();
+
+        // As the browser hands over a frame's messages: all at once, while the loop is busy.
+        java.util.concurrent.CountDownLatch busy = new java.util.concurrent.CountDownLatch(1);
+        connect.channel().eventLoop().execute(() -> {
+            try {
+                busy.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        for (int i = 0; i < 50; i++) {
+            listener.received(ByteBuffer.wrap(("m" + i).getBytes(StandardCharsets.UTF_8)));
+        }
+        listener.closed(null);
+        busy.countDown();
+
+        // Netty reports the channel inactive just after its close future completes.
+        assertThat(inactive.await(5, TimeUnit.SECONDS)).isTrue();
+        List<String> expected = new java.util.ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            expected.add("m" + i);
+        }
+        expected.add("complete");
+        expected.add("inactive");
+        assertThat(seen).containsExactlyElementsOf(expected);
+    }
+
     private Bootstrap bootstrap(CompletableFuture<String> reply) {
         return new Bootstrap()
                 .group(loop)
@@ -198,7 +255,7 @@ class NetConnectionChannelTest {
         volatile boolean silent;
 
         volatile boolean closedByUs;
-        private volatile NetConnection.@Nullable Listener listener;
+        volatile NetConnection.@Nullable Listener listener;
 
         @Override
         public NetConnection connect(String host, int port, NetConnection.Listener listener) {
