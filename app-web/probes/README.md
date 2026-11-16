@@ -19,9 +19,11 @@ app-web/probes/run.sh <Name> [Gradle options]   # for example -Pteavm.fast, -Pbr
 | `DeflateProbe` | Check | The build's deflate and inflate streams, used as the game writes chunks and NBT |
 | `DirectAllocationProbe` | Regression | Heap growth (a tools/teavm-patches fix until TeaVM 0.16.0 had it) |
 | `EventLoopProbe` | Regression | Netty's event loop and a channel's pipeline setup under TeaVM (its assertions hold; the catalog's Netty must be the game's) |
+| `EventLoopHopProbe` | Measurement | How long a task handed to a Netty local event loop waits when the main thread then ends its frame |
 | `FetchFailureProbe` | Check | A failed download reported to a suspended coroutine is caught, and the page doesn't crash |
 | `FileReadProbe` | Regression | web-classlib's FileInputStreamAdditions, and `RandomAccessFile.read` (fixed in TeaVM 0.16.0) |
 | `ImmutableCollectionsProbe` | Regression | tools/teavm-patches' TTemplateCollections hashing (ADR 0034) |
+| `InflatePacketProbe` | Measurement | Inflating and deflating packets with a reset in place, against a new zlib stream each (ADR 0075) |
 | `InitOrderProbe` | Regression | tools/teavm-patches' ClassInitializerInsertionTransformer fix |
 | `InterruptedWaitProbe` | Regression | tools/teavm-patches' TObject fix |
 | `JspiProbe` | Check | Java threads behave the same in the Fast build (JSPI) as in the Compatible build |
@@ -31,6 +33,7 @@ app-web/probes/run.sh <Name> [Gradle options]   # for example -Pteavm.fast, -Pbr
 | `PacketHandoffProbe` | Measurement | What handing a packet to the game's thread costs (ADR 0033) |
 | `ReloadLeakProbe` | Check | Memory held across page reloads in one tab (read with a CDP script) |
 | `SharableProbe` | Regression | tools/webbuild's RemovalTransformer |
+| `SocketDeliveryProbe` | Measurement | What handing one WebSocket message from the page's queue to Java costs |
 | `StorageProbe` | Regression | platform-web's file system (ADR 0011) under TeaVM's own java.io and java.nio.file |
 | `SuppressedProbe` | Regression | Suppressed exceptions (a tools/teavm-patches fix until TeaVM 0.16.0 had it) |
 | `SuspendingReflectionProbe` | Regression | tools/teavm-patches' CoroutineTransformation fix for non-nullable locals |
