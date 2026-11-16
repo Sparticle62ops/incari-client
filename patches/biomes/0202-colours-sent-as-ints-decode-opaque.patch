@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: incari-client <335801235+incari-client@users.noreply.github.com>
+Date: Sun, 15 Nov 2026 19:52:44 -0500
+Subject: [PATCH] biomes: Colours sent as ints decode opaque
+
+Old servers' biomes (ViaVersion's registry for 1.8 to 1.16, vanilla
+servers up to 1.21) send water_color, grass_color and foliage_color
+as ints with no alpha byte. The hex form was made opaque; the int form
+was kept as sent, so with biome blend off (the Potato preset) water,
+grass and leaves drew with alpha 0: invisible.
+
+Signed-off-by: bedrock3359 <181285672+nobuildersnotools@users.noreply.github.com>
+
+diff --git a/src/main/java/net/minecraft/util/ExtraCodecs.java b/src/main/java/net/minecraft/util/ExtraCodecs.java
+index ec82f8c31c2f1e2ef2914be65dd12601807a82df..30fb302f3cc805ea42029d5a05997e79b051379f 100644
+--- a/src/main/java/net/minecraft/util/ExtraCodecs.java
++++ b/src/main/java/net/minecraft/util/ExtraCodecs.java
+@@ -143,3 +143,5 @@
+     public static final Codec<Vector4fc> ARGB_COLOR_VEC4_CODEC = Codec.withAlternative(VECTOR4F, Codec.INT, ARGB::vector4fFromARGB32);
+-    public static final Codec<Integer> STRING_RGB_COLOR = Codec.withAlternative(hexColor(6).xmap(ARGB::opaque, ARGB::transparent), RGB_COLOR_CODEC);
++    // Incari start: a biome colour sent as an int (old servers through Via) has no alpha byte: opaque, as the hex form is
++    public static final Codec<Integer> STRING_RGB_COLOR = Codec.withAlternative(hexColor(6).xmap(ARGB::opaque, ARGB::transparent), RGB_COLOR_CODEC.xmap(ARGB::opaque, ARGB::transparent));
++    // Incari end
+     public static final Codec<Integer> STRING_ARGB_COLOR = Codec.withAlternative(hexColor(8), ARGB_COLOR_CODEC);
