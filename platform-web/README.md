@@ -13,7 +13,7 @@ Audio and WebRTC. Designs: input ADR 0010, networking ADR 0009, storage ADR 0011
 | `DomEventQueue`, `DomKeys`, `CanvasSize`, `DroppedFiles` | Plain Java (JVM-tested): DOM events become SDL-style events between frames; `KeyboardEvent.code` → scancodes; on ChromeOS only (`?fchord=on`/`off` overrides), F then a digit is that function key (F+3 = F3, F+0 = F10), not while typing text; elsewhere F is reported at once. A lost WebGL context (`"graphics"`, from render-webgl2) keeps the window minimized |
 | `CanvasWindow`, `WebDisplays` | The window and displays. The leave-page prompt is on while the mouse is held or the player is in a world (`setLeaveWarning`) |
 | `audio/` | One `AudioContext` with the unlock prompt; decoding through the browser; `Spatializer` matches OpenAL Soft's panning |
-| `WebSocketNetwork` | Server connections; callbacks queue events, `pollEvents` delivers them on the game's thread. `details()` gives the close code, bytes left unsent, whether the browser was online, and the longest an event waited for the game |
+| `WebSocketNetwork` | Server connections; callbacks queue events, delivered on the game's thread at each frame and as a message comes (it wakes the frame wait, ADR 0075). `details()` gives the close code, bytes left unsent, whether the browser was online, and the longest an event waited for the game |
 | `WebFetch` | `PlatformNetwork.fetch` over the browser's `fetch`; the calling thread suspends until the body is in |
 | `rtc/WebRtc` | Peer connections, data channels and the microphone, for voice and shared worlds (ADR 0019) |
 | `WebProfiling` | Memory figures and per-frame rows in `window.__incariFrames` for the benchmark (ADR 0021) |

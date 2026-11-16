@@ -69,7 +69,11 @@ final class Dom {
             params = "callback",
             script = "var w = window.__incariFrameWait;"
                     + "if (!w) { w = window.__incariFrameWait = { pending: false, fired: false, waiter: null };"
-                    + "  window.__incariNetWake = function() { var c = w.waiter; if (c) { w.waiter = null; c(false); } }; }"
+                    // The render thread hands the message to its connection's thread and waits
+                    // again; that thread (and what it wakes in turn) then runs at once, not on a
+                    // timer the browser runs late in play (incariRunWoken, app-web's wakeups.ts).
+                    + "  window.__incariNetWake = function() { var c = w.waiter; if (!c) return; w.waiter = null;"
+                    + "    var run = window.incariRunWoken; if (run) run(function() { c(false); }); else c(false); }; }"
                     + "function frame(c) { var frames = window.__incariFrames; if (frames) frames.begin();"
                     + "  c(true); if (frames) frames.returned(); }"
                     + "if (w.fired) { w.fired = false; Promise.resolve().then(function() { frame(callback); }); return; }"

@@ -6,6 +6,7 @@ import {
   createAsyncImports,
   createPageAsyncImports,
   createPageTimer,
+  RUN_DUE_LIMIT,
   type PageTimer,
   type TimerWorker,
   type WakeupScope,
@@ -142,6 +143,57 @@ describe("wakeups", () => {
     assert.deepEqual(cleared, [2]);
     await sleep(30);
     assert.deepEqual([...ran].sort(), ["later", "now", "visible"]);
+  });
+
+  it("runs the events a wake offers at once, each only once, and leaves the rest to their timers", async () => {
+    const s = scope(() => 1000);
+    const imports = createPageAsyncImports({ ...s, hidden: () => false, timer: null });
+    const ran: string[] = [];
+    const offer = (name: string, time: number): number =>
+      imports.offer(name, (instance) => ran.push(instance as string), time);
+    offer("older", 1000);
+    imports.runWoken(() => {
+      offer("woken", 1000);
+      const killed = offer("killed", 990);
+      offer("later", 1010);
+      imports.kill(killed);
+      imports.offer(
+        "chained",
+        (instance) => {
+          ran.push(instance as string);
+          offer("chain's own", 1000);
+        },
+        1000,
+      );
+    });
+    assert.deepEqual(ran, ["woken", "chained", "chain's own"]);
+    await sleep(40);
+    // The older event and the later one come on their own timers; the woken ones' find nothing.
+    assert.deepEqual(ran, ["woken", "chained", "chain's own", "older", "later"]);
+  });
+
+  it("stops after its limit when the woken events keep offering more", async () => {
+    const s = scope(() => 0);
+    const imports = createPageAsyncImports({ ...s, hidden: () => false, timer: null });
+    const count = { runs: 0 };
+    let stopped = false;
+    const again = (): void => {
+      count.runs++;
+      if (!stopped) {
+        imports.offer(null, again, 0);
+      }
+    };
+    imports.runWoken(() => {
+      imports.offer(null, again, 0);
+    });
+    assert.equal(count.runs, RUN_DUE_LIMIT);
+    // The rest are still on their timers.
+    const runsSoFar = (): number => count.runs;
+    const stop = runsSoFar();
+    await sleep(5);
+    stopped = true;
+    assert.ok(runsSoFar() > stop);
+    await sleep(5);
   });
 
   it("times a page timer in its worker and cancels it there", () => {

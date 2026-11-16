@@ -76,6 +76,11 @@ interface IncariWindow {
    * pool fall back on it while the page is hidden.
    */
   incariTimer?: PageTimer;
+  /**
+   * Calls `wake`, then runs the thread wake-ups it caused (wakeups.ts, `runWoken`): platform-web's
+   * network wake calls it rather than leave them to timers the browser runs late in play.
+   */
+  incariRunWoken?: (wake: () => void) => void;
   /** The single-file page's embedded files (offline.ts): where a script of theirs loads from. */
   incariFiles?: { base: string; url(href: string): string };
 }
@@ -323,7 +328,15 @@ async function startBuild(manifest: BuildManifest, kind: BuildKind, target: Wasm
         if (options.get("wakeups") === "channel") {
           imports.teavmAsync = createAsyncImports();
         } else if (pageTimer !== null) {
-          imports.teavmAsync = createPageAsyncImports(pageWakeupScope(pageTimer));
+          const pageImports = createPageAsyncImports(pageWakeupScope(pageTimer));
+          imports.teavmAsync = pageImports;
+          // A server message's connection thread runs as the message comes (ADR 0075);
+          // `?netwake=timers` leaves it to TeaVM's timer, which play delays ~35 ms.
+          if (options.get("netwake") !== "timers") {
+            page.incariRunWoken = (wake) => {
+              pageImports.runWoken(wake);
+            };
+          }
         }
       },
     }),
