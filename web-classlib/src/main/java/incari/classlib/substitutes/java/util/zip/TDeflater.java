@@ -1,6 +1,7 @@
 package incari.classlib.substitutes.java.util.zip;
 
 import com.jcraft.jzlib.JZlib;
+import com.jcraft.jzlib.StreamResets;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
@@ -217,13 +218,19 @@ public class TDeflater implements AutoCloseable {
         return stream().total_out;
     }
 
-    /** Starts over with a new stream, keeping the level and strategy; jzlib has no reset of its own. */
+    /**
+     * Starts over for a new stream, keeping the level and strategy, and the window and hash chains
+     * ({@link StreamResets}): the game resets after every compressed packet it sends.
+     */
     public void reset() {
-        stream().end();
-        zlib = start();
+        com.jcraft.jzlib.Deflater stream = stream();
+        if (!StreamResets.deflate(stream)) {
+            throw new InternalError("zlib couldn't reset the deflate stream");
+        }
+        stream.setInput(NO_INPUT, 0, 0, false);
         finish = false;
         finished = false;
-        paramsChanged = false;
+        // A level or strategy set since the last deflate still applies from the next one.
     }
 
     public void end() {
