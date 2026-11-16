@@ -19,10 +19,11 @@ import org.teavm.jso.typedarrays.Int8Array;
  * GETs go through {@code fetch} ({@link WebFetch}).
  *
  * <p>The browser's socket callbacks never call Java: they queue what happened in a JavaScript
- * array on the socket, and {@link #deliver} (called by the platform once per frame, on the game's
- * thread) hands it to the listeners. TeaVM compiles most of this program as coroutines, and a
- * coroutine can't start from a JavaScript callback. So listeners hear about the network at most a
- * frame late, which the game's 20 ticks per second never notice.
+ * array on the socket, and {@link #deliver} (called by the platform on the game's thread) hands it
+ * to the listeners. TeaVM compiles most of this program as coroutines, and a coroutine can't start
+ * from a JavaScript callback. The platform delivers as each frame starts and ends, and when a
+ * message ends the render thread's wait between frames, so the network's thread decodes it before
+ * the next frame's packet handling.
  */
 final class WebSocketNetwork implements PlatformNetwork {
 
@@ -122,8 +123,17 @@ final class WebSocketNetwork implements PlatformNetwork {
             if (socket == null || closedByUs || finished) {
                 return;
             }
-            byte[] bytes = new byte[data.remaining()];
-            data.get(bytes);
+            // The channel hands over a buffer that is exactly its array: copied to the page once.
+            byte[] bytes;
+            if (data.hasArray()
+                    && data.arrayOffset() + data.position() == 0
+                    && data.remaining() == data.array().length) {
+                bytes = data.array();
+                data.position(data.limit());
+            } else {
+                bytes = new byte[data.remaining()];
+                data.get(bytes);
+            }
             // Sent at once if open; queued by the page until the socket opens otherwise.
             WebSocketNetwork.send(socket, Int8Array.copyFromJavaArray(bytes));
         }
@@ -281,7 +291,9 @@ final class WebSocketNetwork implements PlatformNetwork {
             params = "url",
             script = "var ws = new WebSocket(url); ws.binaryType = 'arraybuffer'; var q = []; ws.__incariQueue = q;"
                     + "var t = []; ws.__incariTimes = t;"
-                    + "function add(e) { q.push(e); t.push(performance.now()); }"
+                    // Ends the render thread's wait between frames, so the message is delivered now.
+                    + "function add(e) { q.push(e); t.push(performance.now());"
+                    + "  var wake = window.__incariNetWake; if (wake) wake(); }"
                     + "ws.onopen = function() { add(['open']); };"
                     + "ws.onmessage = function(e) {"
                     + "  add(typeof e.data === 'string' ? ['text', e.data] : ['message', e.data]); };"

@@ -11,7 +11,7 @@ import org.teavm.jso.typedarrays.Int8Array;
  * Every JavaScript snippet the web platform calls (through TeaVM's interop), in one file so the
  * browser surface is easy to audit.
  *
- * <p>Runs on the page's only thread. Nothing here blocks except {@link #nextAnimationFrame}, which
+ * <p>Runs on the page's only thread. Nothing here blocks except {@link #nextAnimationFrameOrMessage}, which
  * suspends the calling coroutine and lets the page run.
  */
 final class Dom {
@@ -29,17 +29,29 @@ final class Dom {
     @JSBody(script = "return performance.now();")
     static native double nowMillis();
 
-    /** Suspends until the browser's next animation frame: where the page draws and handles input. */
+    /**
+     * Suspends until the browser's next animation frame (where the page draws and handles input),
+     * or until a WebSocket message arrives first ({@code window.__incariNetWake}, below).
+     *
+     * @return true for the frame; false for a message, and the frame is still to come: the next
+     *     call waits for that same frame
+     */
     @Async
-    static native Void nextAnimationFrame();
+    static native Boolean nextAnimationFrameOrMessage();
 
-    private static void nextAnimationFrame(AsyncCallback<Void> callback) {
-        requestAnimationFrame(() -> callback.complete(null));
+    private static void nextAnimationFrameOrMessage(AsyncCallback<Boolean> callback) {
+        waitForFrame(frame -> callback.complete(frame));
     }
 
     @JSFunctor
     interface FrameCallback extends JSObject {
         void run();
+    }
+
+    /** Called with true for the animation frame, false for a WebSocket message that came first. */
+    @JSFunctor
+    interface FrameOrMessageCallback extends JSObject {
+        void run(boolean frame);
     }
 
     /**
@@ -48,16 +60,27 @@ final class Dom {
      * wake-up a second, then a minute, too few to answer a server's keep-alives, so while hidden the
      * quarter second is timed by the page's worker timer ({@code window.incariTimer}, app-web's
      * {@code wakeups.ts}) where there is one.
+     *
+     * <p>A WebSocket message that comes first calls back with false instead ({@code
+     * window.__incariNetWake}); the frame stays requested, and a frame that came while nobody waited
+     * is answered at once.
      */
     @JSBody(
             params = "callback",
-            script = "var done = false, cancel = null;"
-                    + "function run() { if (done) return; done = true; if (cancel) cancel();"
-                    + "  var frames = window.__incariFrames; if (frames) frames.begin();"
-                    + "  callback(); if (frames) frames.returned(); }"
+            script = "var w = window.__incariFrameWait;"
+                    + "if (!w) { w = window.__incariFrameWait = { pending: false, fired: false, waiter: null };"
+                    + "  window.__incariNetWake = function() { var c = w.waiter; if (c) { w.waiter = null; c(false); } }; }"
+                    + "function frame(c) { var frames = window.__incariFrames; if (frames) frames.begin();"
+                    + "  c(true); if (frames) frames.returned(); }"
+                    + "if (w.fired) { w.fired = false; Promise.resolve().then(function() { frame(callback); }); return; }"
+                    + "w.waiter = callback;"
+                    + "if (w.pending) return;"
+                    + "w.pending = true; var done = false, cancel = null;"
+                    + "function run() { if (done) return; done = true; if (cancel) cancel(); w.pending = false;"
+                    + "  var c = w.waiter; w.waiter = null; if (c) frame(c); else w.fired = true; }"
                     + "requestAnimationFrame(run); var fb = window.incariFallback, tm = fb ? 0 : setTimeout(run, 250);"
                     + "cancel = fb ? fb(run, 250) : function() { clearTimeout(tm); };")
-    private static native void requestAnimationFrame(FrameCallback callback);
+    private static native void waitForFrame(FrameOrMessageCallback callback);
 
     /**
      * Installs the frame monitor, {@code window.__incariFrames}: how long each game frame takes

@@ -218,8 +218,24 @@ public final class WebPlatform implements Platform {
             listener.notice(notice);
         }
         // Network callbacks queue in the page like input does; the game's thread delivers them.
+        deliverNetwork();
+    }
+
+    /** Hands what the page's sockets and data channels queued to their listeners. The game's thread. */
+    private void deliverNetwork() {
         network.deliver();
         rtc.deliver();
+    }
+
+    /**
+     * Waits for the next animation frame. A WebSocket message that comes first is delivered at
+     * once, so the network's thread decodes it in the wait instead of after the next frame's packet
+     * handling; then the wait goes on for the same frame.
+     */
+    private void waitForFrame() {
+        while (!Dom.nextAnimationFrameOrMessage()) {
+            deliverNetwork();
+        }
     }
 
     /** Moves the events the page queued since the last poll into {@code queue}, on the game's thread. */
@@ -298,14 +314,19 @@ public final class WebPlatform implements Platform {
             // The render thread waited mid-frame; a wait of 50 ms or more prints where it was.
             Dom.consoleWarn("[Incari] Stall: a " + Math.round(-stall) + " ms frame in which the render thread waited");
         }
+        // What the servers sent during the frame goes to its connections now: the network's thread
+        // decodes it while the page waits, and the game handles it as the next frame starts. Handed
+        // over only at the next frame's pollEvents, it was decoded after that frame's packet
+        // handling, a whole frame later.
+        deliverNetwork();
         // The page's only chance to run: input, drawing, timers, network callbacks. Under a frame
         // limit, as many animation frames as it takes: the page keeps drawing and handling input,
         // the game waits between its frames rather than inside one.
-        Dom.nextAnimationFrame();
+        waitForFrame();
         while (frameInterval > 0 && Dom.nowMillis() - frameStart < frameInterval - FRAME_LIMIT_SLACK_MILLIS) {
             // A skipped animation frame is between the game's frames, not a wait inside one.
             Dom.frameSkipped();
-            Dom.nextAnimationFrame();
+            waitForFrame();
         }
         frameStart = Dom.nowMillis();
         frameInterval = 0;
