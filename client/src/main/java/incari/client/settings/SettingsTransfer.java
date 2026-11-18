@@ -9,10 +9,13 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.mojang.logging.LogUtils;
 import incari.client.modules.IncariModules;
+import incari.client.online.IncariOnline;
 import incari.client.modules.ModuleStorage;
 import incari.client.platform.ClientPlatform;
 import incari.framework.config.ConfigStorage;
 import incari.framework.config.Profiles;
+import incari.framework.online.Online;
+import incari.online.OnlineService;
 import incari.platform.api.PlatformShell;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -60,7 +63,9 @@ public final class SettingsTransfer {
     public static void export() {
         Minecraft minecraft = Minecraft.getInstance();
         Path gameDirectory = minecraft.gameDirectory.toPath();
-        String text = GSON.toJson(bundle(gameDirectory));
+        JsonObject data = bundle(gameDirectory);
+        String text = GSON.toJson(data);
+        syncToAccount(data.toString());
         PlatformShell shell = ClientPlatform.get().shell();
         if (shell.showsFolders()) {
             Path folder = gameDirectory.resolve("incari").resolve("settings");
@@ -123,6 +128,41 @@ public final class SettingsTransfer {
         if (!applied) {
             LOGGER.warn("Couldn't apply the profiles of an imported settings file");
         }
+        if (applied) {
+            syncToAccount(bundle.toString());
+        }
+    }
+
+    /**
+     * Pushes the settings bundle to the player's Incari account, so signing in elsewhere can
+     * restore it (issue #29). Quietly skipped when the player isn't signed in or the service
+     * doesn't keep client state.
+     */
+    static void syncToAccount(String json) {
+        OnlineService online = IncariOnline.service();
+        if (online == null || online.status() != Online.Status.SIGNED_IN) {
+            return;
+        }
+        online.saveClientState(json, result -> {});
+    }
+
+    /**
+     * Pulls the settings bundle the account holds and asks before anything changes: the restore
+     * side of the account sync (issue #29). A toast says what's missing when there's nothing yet.
+     */
+    public static void importFromAccount(Screen parent) {
+        Minecraft minecraft = Minecraft.getInstance();
+        OnlineService online = IncariOnline.service();
+        if (online == null || online.status() != Online.Status.SIGNED_IN) {
+            toast(minecraft, "Not signed in", "Sign in to the Incari account first");
+            return;
+        }
+        String json = online.clientState();
+        if (json == null) {
+            toast(minecraft, "Nothing saved yet", "Export on a signed-in device first");
+            return;
+        }
+        confirm(parent, "the account's settings", json.getBytes(StandardCharsets.UTF_8));
     }
 
     /** The whole file: what it is, the switches, the keybinds and the profiles. */

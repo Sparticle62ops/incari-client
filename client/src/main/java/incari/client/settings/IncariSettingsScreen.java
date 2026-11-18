@@ -125,7 +125,11 @@ public final class IncariSettingsScreen extends ListScreen {
                         Ui.button(
                                 Component.literal("Import"),
                                 Theme.SMALL_BUTTON_WIDTH,
-                                () -> SettingsTransfer.openImport(this))),
+                                () -> SettingsTransfer.openImport(this)),
+                        Ui.button(
+                                Component.literal("From account"),
+                                Theme.SMALL_BUTTON_WIDTH,
+                                () -> SettingsTransfer.importFromAccount(this))),
                 () -> {}));
         return rows;
     }
